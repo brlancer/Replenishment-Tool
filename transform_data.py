@@ -71,8 +71,10 @@ def transform_sales_data(sales_data):
         order['weeks_ago'] = None  # Default to None
         for week_start, week_end, weeks_ago in past_week_intervals:
             if week_start <= order_date.strftime("%Y-%m-%d") <= week_end:
-                # order['weeks_ago'] = weeks_ago
-                order['weeks_ago_string'] = f"{weeks_ago} weeks ago"
+                # Find the Sunday of the week interval
+                week_end_date = datetime.strptime(week_end, "%Y-%m-%d")
+                sunday_date = week_end_date.strftime("%b%d")
+                order['weeks_ago_string'] = f"{weeks_ago}_weeks_ago_{sunday_date}"
                 break
 
     # Convert orders and line items to DataFrames

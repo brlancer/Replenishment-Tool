@@ -31,7 +31,7 @@ def get_record_ids_by_value(table, field, values):
     
     return record_ids
 
-def populate_airtable_production():
+def populate_production():
     file_id = '1L35Drb5FZfPsV7kk73wZzsqCQ9k6x7KSoKJMYFhefeQ'  # Google Drive file name: PO BUILDER 3.0
 
     # Open the template file with gspread
@@ -135,6 +135,3 @@ def populate_airtable_production():
     line_items_table.batch_create(new_line_item_records)
     print("Added new line item records.")
 
-# Test the function
-if __name__ == "__main__":
-    populate_airtable_production()

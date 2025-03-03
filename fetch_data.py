@@ -1,4 +1,4 @@
-import requests, time, json, os
+import requests, time, json, os, pickle
 from urllib.parse import urlencode
 from config import AIRTABLE_API_KEY, AIRTABLE_VARIANTS_ENDPOINT, AIRTABLE_PRODUCTION_DEV_BASE_ID, SHIPHERO_API_TOKEN, SHIPHERO_REFRESH_TOKEN, SHIPHERO_REFRESH_ENDPOINT, SHIPHERO_GRAPHQL_ENDPOINT, SHOPIFY_API_TOKEN, SHOPIFY_GRAPHQL_ENDPOINT
 import pandas as pd
@@ -13,7 +13,7 @@ def fetch_airtable_incoming_stock():
     line_items_table = Table(AIRTABLE_API_KEY, AIRTABLE_PRODUCTION_DEV_BASE_ID, "Line Items")
 
     print("Fetching records with PO Status = 'Open'...")
-    records = line_items_table.all(formula="{PO Status} = 'Open'", fields=['Position - PO # - SKU', 'sku', 'Quantity Ordered', 'Quantity Received (ShipHero)'])
+    records = line_items_table.all(formula="OR({PO Status} = 'Open', {PO Status} = 'Draft')", fields=['Position - PO # - SKU', 'sku', 'Quantity Ordered', 'Quantity Received (ShipHero)'])
     print(f"Fetched {len(records)} records.")
     print("First 5 records:")
     for record in records[:5]:
@@ -26,8 +26,8 @@ def fetch_airtable_incoming_stock():
         data.append({
             'Position - PO # - SKU': fields.get('Position - PO # - SKU', ''),
             'sku': fields.get('sku', ''),
-            'ordered': fields.get('ordered', 0),
-            'received': fields.get('received', 0)
+            'ordered': fields.get('Quantity Ordered', 0),
+            'received': fields.get('Quantity Received (ShipHero)', 0)
         })
     print(f"Extracted data for {len(data)} records.")
 
@@ -35,6 +35,9 @@ def fetch_airtable_incoming_stock():
     df = pd.DataFrame(data)
     print("DataFrame created:")
     print(df.head())
+
+    print("Ensuring 'sku' column contains only strings and cleaning 'sku' values...")
+    df['sku'] = df['sku'].apply(lambda x: str(x[0]) if isinstance(x, list) and len(x) > 0 else str(x) if not isinstance(x, str) else x)
 
     print("Calculating 'pending' field...")
     df['incoming'] = df['ordered'] - df['received']
@@ -98,7 +101,17 @@ def fetch_airtable_product_metadata():
 
 # Shiphero functions
 
-def fetch_shiphero_stock_levels():
+def fetch_shiphero_stock_levels(use_cache=False):
+    
+    CACHE_FILE = 'cache/shiphero_stock_levels.pkl'
+
+    if use_cache and os.path.exists(CACHE_FILE):
+        print("Loading cached stock levels data...")
+        with open(CACHE_FILE, 'rb') as f:
+          return pickle.load(f)
+        
+    print("Fetching fresh stock levels data from ShipHero...")
+
     query = """
     query ($first: Int!, $after: String) {
       warehouse_products(warehouse_id: "V2FyZWhvdXNlOjEwMTU4Mw==", active: true) { 
@@ -130,6 +143,12 @@ def fetch_shiphero_stock_levels():
     }
     
     stock_levels = fetch_shiphero_paginated_data(query, variables, "warehouse_products")
+
+    # Save the fetched data to cache
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, 'wb') as f:
+      pickle.dump(stock_levels, f)
+
     return stock_levels
 
 def fetch_shiphero_incoming_stock():  # Not currently functional
@@ -192,7 +211,17 @@ def fetch_shiphero_incoming_stock():  # Not currently functional
 
 # Shopify functions
 
-def fetch_shopify_sales_data():
+def fetch_shopify_sales_data(use_cache=False):
+    
+    CACHE_FILE = 'cache/shopify_sales_data.pkl'
+
+    if use_cache and os.path.exists(CACHE_FILE):
+        print("Loading cached sales data...")
+        with open(CACHE_FILE, 'rb') as f:
+          return pickle.load(f)
+        
+    print("Fetching fresh sales data from Shopify...")
+
     # Calculate the date 9 weeks before today
     nine_weeks_ago = datetime.now() - timedelta(weeks=9)
     formatted_date = nine_weeks_ago.strftime("%Y-%m-%d")
@@ -227,4 +256,10 @@ def fetch_shopify_sales_data():
     """
     
     sales_data = fetch_shopify_bulk_operation(inner_query)
+
+    # Save the fetched data to cache
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, 'wb') as f:
+      pickle.dump(sales_data, f)
+
     return sales_data

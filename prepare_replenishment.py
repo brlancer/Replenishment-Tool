@@ -4,15 +4,15 @@ from transform_data import transform_stock_levels, transform_sales_data, transfo
 from prepare_merged_replenishment_df import prepare_merged_replenishment_df
 from export_sheets_replenishment import export_sheets_replenishment
 
-def prepare_replenishment():
+def prepare_replenishment(use_cache_stock_levels=False, use_cache_sales=False):
     
     # Prepare stock levels
-    stock_levels_data = fetch_shiphero_stock_levels()
+    stock_levels_data = fetch_shiphero_stock_levels(use_cache=use_cache_stock_levels)
     incoming_stock_data = fetch_airtable_incoming_stock()
     stock_levels_df = transform_stock_levels(stock_levels_data, incoming_stock_data)
 
     # Prepare sales and product metadata
-    sales_data = fetch_shopify_sales_data()
+    sales_data = fetch_shopify_sales_data(use_cache=use_cache_sales)
     sales_df = transform_sales_data(sales_data)
 
     # Prepare product metadata
