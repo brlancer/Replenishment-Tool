@@ -46,6 +46,7 @@ refresh_shiphero_token_manual.py
 # Output
 output/
 tests/output/
+cache/
 
 # Google credentials
 service-account.json

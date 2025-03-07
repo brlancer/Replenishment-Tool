@@ -98,6 +98,8 @@ def fetch_shiphero_with_throttling(query, variables):
         
         if response.status_code == 200:
             result = response.json()
+            # Print the result for debugging purposes
+            print(result)
             
             if "errors" in result:
                 error = result["errors"][0]
@@ -144,6 +146,21 @@ def fetch_shiphero_paginated_data(query, variables, data_key):
             has_next_page = False
 
     return data_list
+
+def execute_shiphero_graphql_query(query):
+    """Execute the GraphQL query and return the response."""
+    url = "https://public-api.shiphero.com/graphql"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {config.SHIPHERO_API_TOKEN}"
+    }
+    print("Executing GraphQL query:")
+    print(query)
+    response = requests.post(url, json=query, headers=headers)
+    print("Response status code:", response.status_code)
+    print("Response content:", response.content)
+    response.raise_for_status()
+    return response.json()
 
 # Shopify API utility functions
 

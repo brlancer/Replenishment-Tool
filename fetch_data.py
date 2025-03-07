@@ -1,6 +1,6 @@
 import requests, time, json, os, pickle
 from urllib.parse import urlencode
-from config import AIRTABLE_API_KEY, AIRTABLE_VARIANTS_ENDPOINT, AIRTABLE_PRODUCTION_DEV_BASE_ID, SHIPHERO_API_TOKEN, SHIPHERO_REFRESH_TOKEN, SHIPHERO_REFRESH_ENDPOINT, SHIPHERO_GRAPHQL_ENDPOINT, SHOPIFY_API_TOKEN, SHOPIFY_GRAPHQL_ENDPOINT
+from config import AIRTABLE_API_KEY, AIRTABLE_VARIANTS_ENDPOINT, AIRTABLE_PRODUCTION_DEV_BASE_ID, SHIPHERO_WAREHOUSE_ID, SHIPHERO_API_TOKEN, SHIPHERO_REFRESH_TOKEN, SHIPHERO_REFRESH_ENDPOINT, SHIPHERO_GRAPHQL_ENDPOINT, SHOPIFY_API_TOKEN, SHOPIFY_GRAPHQL_ENDPOINT
 import pandas as pd
 from pyairtable import Table
 from datetime import datetime, timedelta
@@ -26,7 +26,7 @@ def fetch_airtable_incoming_stock():
     line_items_table = Table(AIRTABLE_API_KEY, AIRTABLE_PRODUCTION_DEV_BASE_ID, "Line Items")
 
     # print("Fetching records with PO Status = 'Open'...")
-    records = line_items_table.all(formula="OR({PO Status} = 'Open', {PO Status} = 'Draft')", fields=['Position - PO # - SKU', 'sku', 'Quantity Ordered', 'Quantity Received (ShipHero)'])
+    records = line_items_table.all(formula="OR({PO Status} = 'Open', {PO Status} = 'Draft')", fields=['Position - PO # - SKU', 'sku', 'Quantity Ordered', 'Quantity Received'])
     # print(f"Fetched {len(records)} records.")
     # print("First 5 records:")
     # for record in records[:5]:
@@ -40,7 +40,7 @@ def fetch_airtable_incoming_stock():
             'Position - PO # - SKU': fields.get('Position - PO # - SKU', ''),
             'sku': fields.get('sku', ''),
             'ordered': fields.get('Quantity Ordered', 0),
-            'received': fields.get('Quantity Received (ShipHero)', 0)
+            'received': fields.get('Quantity Received', 0)
         })
     # print(f"Extracted data for {len(data)} records.")
 
@@ -179,50 +179,44 @@ def fetch_shiphero_stock_levels(use_cache=False):
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, 'wb') as f:
       pickle.dump(stock_levels, f)
-
-    # Debug statement: print the first 5 records where backorder > 0
-    print("Backordered Products:")
-    backordered_products = [product for product in stock_levels if product["node"]["backorder"] > 0]
-    for product in backordered_products[:5]:
-        print(product)
         
     return stock_levels
 
-def fetch_shiphero_incoming_stock():  # Not currently functional
-    """
-    Fetches incoming stock data from ShipHero and processes it into a list of dictionaries.
-    This function retrieves incoming stock data from the ShipHero GraphQL API and paginates
-    through the results to fetch all available data. It then processes the data into a list
-    of dictionaries, where each dictionary represents a product and contains relevant fields.
-    Returns:
-      list: A list of dictionaries containing the incoming stock data for each product.
-    """
+def fetch_purchase_orders_from_shiphero(created_from: str = None):
+  """Fetch active purchase orders from ShipHero."""
+  
+  if not created_from:
+    raise ValueError("The 'created_from' parameter is required.")
+  
+  # Convert created_from to ISODateTime format
+  try:
+    created_from_iso = datetime.strptime(created_from, "%Y-%m-%d").isoformat()
+    created_from = created_from_iso + "Z"
+  except ValueError as e:
+    raise ValueError(f"Invalid date format for 'created_from': {created_from}. Expected format: YYYY-MM-DD") from e
 
-    query = """
-    query ($first: Int!, $after: String) {
-      purchase_orders(warehouse_id: "V2FyZWhvdXNlOjEwMTU4Mw==", fulfillment_status: "Pending") { 
-        complexity 
-        request_id 
-        data(first: $first, after: $after) { 
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges { 
-            node { 
-              id 
-              po_number
-              created_at
-              po_date
-              fulfillment_status
-              line_items {
-                edges {
-                  node {
-                    id
-                    sku
-                    quantity
-                    quantity_received
-                  }
+  query = """
+  query ($first: Int!, $after: String, $created_from: ISODateTime, $warehouse_id: String){
+    purchase_orders(created_from: $created_from, warehouse_id: $warehouse_id) {
+      complexity
+      request_id
+      data(first: $first, after: $after) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          node {
+            id
+            po_number
+            fulfillment_status
+            line_items {
+              edges {
+                node {
+                  id
+                  sku
+                  quantity
+                  quantity_received
                 }
               }
             }
@@ -230,31 +224,22 @@ def fetch_shiphero_incoming_stock():  # Not currently functional
         }
       }
     }
-    """
-    
-    variables = {
-        "first": 5,
-        "after": None
-    }
-    
-    purchase_orders_data = fetch_shiphero_paginated_data(query, variables, "purchase_orders")
-    
-    if purchase_orders_data:
-        incoming_stock = {}
-        
-        for order in purchase_orders_data:
-            for item in order["node"]["line_items"]["edges"]:
-                sku = item["node"]["sku"]
-                quantity = item["node"]["quantity"]
-                if sku in incoming_stock:
-                    incoming_stock[sku] += quantity
-                else:
-                    incoming_stock[sku] = quantity
-        
-        return incoming_stock
-    else:
-        return None
+  }
+  """
+  
+  variables = {
+    "first": 10,
+    "after": None,
+    "created_from": created_from,
+    "warehouse_id": SHIPHERO_WAREHOUSE_ID
+  }
 
+  # print the query and variables
+  print(query)
+  print(variables)
+  purchase_orders = fetch_shiphero_paginated_data(query, variables, "purchase_orders")
+  
+  return purchase_orders
 
 # Shopify functions
 

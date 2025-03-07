@@ -2,31 +2,14 @@ import requests
 from pyairtable import Table
 import config
 import json
+from fetch_data import fetch_purchase_orders_from_shiphero
+from config import SHIPHERO_WAREHOUSE_ID
 
-def fetch_purchase_orders_to_sync():
-    """Fetch purchase orders with ShipHero Sync Status = 'Queued' and their associated line items."""
-    print("Initializing Airtable tables...")
-    purchase_orders_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Purchase Orders")
-    line_items_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Line Items")
-
-    print("Fetching purchase orders to sync...")
-    purchase_orders = purchase_orders_table.all(formula="{ShipHero Sync Status} = 'Queued'")
-    print(f"Fetched {len(purchase_orders)} purchase orders to sync.")
-
-    for po_record in purchase_orders:
-        po_number = po_record['fields']['PO #']
-        print(f"Fetching line items for purchase order number: {po_number}...")
-        line_items = line_items_table.all(formula=f"AND({{PO #}} = '{po_number}', {{ShipHero Sync Status}} = 'Queued')")
-        print(f"Fetched {len(line_items)} line items for purchase order number: {po_number}.")
-        po_record['line_items'] = line_items
-
-    return purchase_orders
-
-def prepare_graphql_query(po_record):
+def prepare_graphql_query_to_create_purchase_orders(po_record):
     """Prepare the GraphQL query for the purchase_order_create mutation."""
     po_number = po_record['fields']['PO #']
     vendor_id = po_record['fields']['ShipHero Vendor ID'][0]
-    warehouse_id = config.SHIPHERO_WAREHOUSE_ID
+    warehouse_id = SHIPHERO_WAREHOUSE_ID
 
     line_items_data = [
         {
@@ -84,7 +67,7 @@ def prepare_graphql_query(po_record):
 
     return query
 
-def execute_graphql_query(query):
+def execute_shiphero_graphql_query(query):
     """Execute the GraphQL query and return the response."""
     url = "https://public-api.shiphero.com/graphql"
     headers = {
@@ -99,145 +82,150 @@ def execute_graphql_query(query):
     response.raise_for_status()
     return response.json()
 
-def update_airtable_status(purchase_orders_table, po_id, status):
-    """Update the ShipHero Sync Status field in Airtable."""
-    print(f"Updating ShipHero Sync Status for purchase order ID: {po_id} to {status}...")
-    purchase_orders_table.update(po_id, {"ShipHero Sync Status": status})
-    print(f"Updated ShipHero Sync Status for purchase order ID: {po_id}.")
+def sync_shiphero_to_airtable(purchase_orders_table, line_items_table, airtable_po_record, shiphero_po):
+    """Update Airtable with ShipHero Purchase Order data."""
+    airtable_po_id = airtable_po_record['id']
+    purchase_orders_table.update(airtable_po_id, {
+        "shiphero_id": shiphero_po['id'],
+        "Status (ShipHero)": shiphero_po['fulfillment_status']
+    })
 
-def update_airtable_with_shiphero_ids(purchase_orders_table, line_items_table, po_record, shiphero_po_id, shiphero_line_items):
-    """Update Airtable with ShipHero Purchase Order ID and Line Item IDs."""
-    po_id = po_record['id']
-    print(f"Updating Airtable with ShipHero Purchase Order ID: {shiphero_po_id} for PO ID: {po_id}...")
-    purchase_orders_table.update(po_id, {"shiphero_id": shiphero_po_id})
-    print(f"Updated Airtable with ShipHero Purchase Order ID: {shiphero_po_id} for PO ID: {po_id}.")
+    for airtable_line_item in airtable_po_record['line_items']:
+        airtable_sku = airtable_line_item['fields']['sku'][0] if isinstance(airtable_line_item['fields']['sku'], list) else airtable_line_item['fields']['sku']
+        shiphero_line_item = next((item['node'] for item in shiphero_po['line_items']['edges'] if item['node']['sku'] == airtable_sku), None)
+        if shiphero_line_item:
+            shiphero_line_item_id = shiphero_line_item['id']
+            quantity_received = shiphero_line_item.get('quantity_received', 0)
+            airtable_line_item_id = airtable_line_item['id']
+            line_items_table.update(airtable_line_item_id, {
+                "shiphero_id": shiphero_line_item_id,
+                "Quantity Received": quantity_received
+            })
 
-    for line_item in po_record['line_items']:
-        airtable_sku = line_item['fields']['sku'][0] if isinstance(line_item['fields']['sku'], list) else line_item['fields']['sku']
-        shiphero_line_item_id = next((item['node']['id'] for item in shiphero_line_items if item['node']['sku'] == airtable_sku), None)
-        if shiphero_line_item_id:
-            line_item_id = line_item['id']
-            print(f"Updating Airtable with ShipHero Line Item ID: {shiphero_line_item_id} for Line Item ID: {line_item_id}...")
-            line_items_table.update(line_item_id, {"shiphero_id": shiphero_line_item_id})
-            print(f"Updated Airtable with ShipHero Line Item ID: {shiphero_line_item_id} for Line Item ID: {line_item_id}.")
-
-def push_enqueued_pos_to_shiphero(purchase_orders):
-    """Push enqueued purchase orders to ShipHero."""
+def push_pos_to_shiphero():
+    """
+    Fetch purchase orders with ShipHero Sync Status = 'Queued' and their associated line items.
+    Then push enqueued purchase orders to ShipHero.
+    """
     purchase_orders_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Purchase Orders")
     line_items_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Line Items")
+
+    print("Fetching purchase orders to sync...")
+    purchase_orders = purchase_orders_table.all(formula="{ShipHero Sync Status} = 'Queued'")
+    print(f"Fetched {len(purchase_orders)} purchase orders to sync.")
+
+    # If no purchase orders are found, return early
+    if not purchase_orders:
+        print("No purchase orders to sync.")
+        return
+
+    for po_record in purchase_orders:
+        po_number = po_record['fields']['PO #']
+        print(f"Fetching line items for purchase order number: {po_number}...")
+        line_items = line_items_table.all(formula=f"AND({{PO #}} = '{po_number}', {{ShipHero Sync Status}} = 'Queued')")
+        print(f"Fetched {len(line_items)} line items for purchase order number: {po_number}.")
+        po_record['line_items'] = line_items
 
     for po_record in purchase_orders:
         po_id = po_record['id']
         po_number = po_record['fields']['PO #']
 
-        # Prepare the GraphQL query
-        query = prepare_graphql_query(po_record)
-
         try:
             # Execute the GraphQL query
-            response = execute_graphql_query(query)
+            query = prepare_graphql_query_to_create_purchase_orders(po_record)
+            response = execute_shiphero_graphql_query(query)
             print(f"Successfully synced purchase order: {po_number} to ShipHero.")
             print(response)
 
             # Extract ShipHero Purchase Order ID and Line Item IDs
-            shiphero_po_id = response['data']['purchase_order_create']['purchase_order']['id']
-            shiphero_line_items = response['data']['purchase_order_create']['purchase_order']['line_items']['edges']
+            shiphero_po = response['data']['purchase_order_create']['purchase_order']
+            # shiphero_line_items = response['data']['purchase_order_create']['purchase_order']['line_items']['edges']
 
-            # Update Airtable with ShipHero IDs
-            update_airtable_with_shiphero_ids(purchase_orders_table, line_items_table, po_record, shiphero_po_id, shiphero_line_items)
+            # Sync ShipHero Purchase Order ID and Line Item IDs to Airtable
+            sync_shiphero_to_airtable(purchase_orders_table, line_items_table, po_record, shiphero_po)
 
             # Update Airtable status to "Synced"
-            update_airtable_status(purchase_orders_table, po_id, "Synced")
+            purchase_orders_table.update(po_id, {"ShipHero Sync Status": "Synced"})
         except requests.exceptions.RequestException as e:
             print(f"Failed to sync purchase order: {po_number} to ShipHero. Error: {e}")
             # Update Airtable status to "Failed"
-            update_airtable_status(purchase_orders_table, po_id, "Failed")
+            purchase_orders_table.update(po_id, {"ShipHero Sync Status": "Failed"})
 
-def fetch_active_purchase_orders_from_shiphero():
-    """Fetch active purchase orders from ShipHero."""
-    query = {
-        "query": f"""
-        query {{
-            purchase_orders(fulfillment_status: "Pending", warehouse_id: "{config.SHIPHERO_WAREHOUSE_ID}") {{
-                complexity
-                request_id
-                data(last: 5) {{
-                    edges {{
-                        node {{
-                            id
-                            po_number
-                            fulfillment_status
-                            line_items {{
-                                edges {{
-                                    node {{
-                                        id
-                                        sku
-                                        quantity
-                                        quantity_received
-                                    }}
-                                }}
-                            }}
-                        }}
-                    }}
-                }}
-            }}
-        }}
-        """
-    }
-    response = execute_graphql_query(query)
-    return response['data']['purchase_orders']['data']
-
-def sync_purchase_order_data_from_shiphero():
-    """Sync purchase order data from ShipHero to Airtable."""
-    print("Fetching active purchase orders from ShipHero...")
-    active_purchase_orders = fetch_active_purchase_orders_from_shiphero()
-    print(f"Fetched {len(active_purchase_orders)} active purchase orders from ShipHero.")
-
+def sync_shiphero_purchase_orders_to_airtable(created_from: str = None):
+    """
+    Syncs purchase orders from ShipHero to Airtable.
+    This function performs the following steps:
+    1. Fetches purchase orders from Airtable with Status Internal = "Open".
+    2. Determines the oldest date created of these open purchase orders.
+    3. Fetches purchase orders from ShipHero created after the oldest date created.
+    4. Populates the following fields in Airtable for each matching PO in ShipHero:
+       - ShipHero PO ID
+       - ShipHero Line Item IDs
+       - ShipHero Status
+       - ShipHero Quantity Received
+    5. Prints the number of purchase orders synced.
+    6. If any purchase orders were not found in Airtable, prints a warning with the PO numbers.
+    Note: Uses Airtable automation to verify whether Status Internal can be updated to "Closed" after syncing.
+    """
+    # Fetch purchase orders from Airtable with Status Internal = "Open"
     purchase_orders_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Purchase Orders")
     line_items_table = Table(config.AIRTABLE_API_KEY, config.AIRTABLE_PRODUCTION_DEV_BASE_ID, "Line Items")
+    
+    print("Fetching open purchase orders from Airtable...")
+    purchase_orders = purchase_orders_table.all(formula="{Status Internal} = 'Open'")
+    print(f"Fetched {len(purchase_orders)} open purchase orders from Airtable")
+    
+    if not purchase_orders:
+        print("No open purchase orders found in Airtable.")
+        return
 
-    for po_edge in active_purchase_orders:
-        ### NOTE TO SELF DEBUGGING HERE AS OF 3/2: Trying to get po graphql response to play nice being synced back to airtable
-        po = po_edge['node']        
-        print("Processing Purchase Order:", po)  # Debugging statement
+    for po_record in purchase_orders:
+        po_number = po_record['fields']['PO #']
+        print(f"Fetching line items for purchase order number: {po_number}...")
+        line_items = line_items_table.all(formula=f"{{PO #}} = '{po_number}'")
+        print(f"Fetched {len(line_items)} line items for purchase order number: {po_number}.")
+        po_record['line_items'] = line_items
 
-        shiphero_po_id = po['id']
-        fulfillment_status = po['fulfillment_status']
-        po_number = po['po_number']
+    # Get the oldest date created of purchase orders in Airtable with Status Internal = "Open"
+    if not created_from:
+        oldest_date_created = min(po['fields']['Date Created'] for po in purchase_orders)
+        print(f"Oldest date created for open purchase orders: {oldest_date_created}")
+        created_from = oldest_date_created
 
-        # Find the corresponding PO in Airtable
-        airtable_po = purchase_orders_table.first(formula=f"{{shiphero_id}} = '{shiphero_po_id}'")
-        if airtable_po:
-            po_id = airtable_po['id']
-            print(f"Updating Airtable PO ID: {po_id} with fulfillment status: {fulfillment_status}...")
-            purchase_orders_table.update(po_id, {"Status (ShipHero)": fulfillment_status})
-            print(f"Updated Airtable PO ID: {po_id} with fulfillment status: {fulfillment_status}.")
+    # Fetch purchase orders from ShipHero created after the oldest date created
+    shiphero_purchase_orders = fetch_purchase_orders_from_shiphero(created_from=created_from)
 
-            # Update line items
-            for line_item in po['line_items']['data']:
-                shiphero_line_item_id = line_item['id']
-                quantity = line_item['quantity']
-                quantity_received = line_item['quantity_received']
-                sku = line_item['sku']
+    if not shiphero_purchase_orders:
+        print("No new purchase orders found in ShipHero.")
+        return
 
-                # Find the corresponding line item in Airtable
-                airtable_line_item = line_items_table.first(formula=f"{{shiphero_id}} = '{shiphero_line_item_id}'")
-                if airtable_line_item:
-                    line_item_id = airtable_line_item['id']
-                    print(f"Updating Airtable Line Item ID: {line_item_id} with quantity: {quantity} and quantity received: {quantity_received}...")
-                    line_items_table.update(line_item_id, {
-                        "Order Quantity (ShipHero)": quantity,
-                        "Quantity Received (ShipHero)": quantity_received
-                    })
-                    print(f"Updated Airtable Line Item ID: {line_item_id} with quantity: {quantity} and quantity received: {quantity_received}.")
+    # Sync ShipHero purchase orders to Airtable
+    synced_count = 0
+    not_found_po_numbers = []
+
+    # Iterate over each purchase order fetched from ShipHero
+    for shiphero_po in shiphero_purchase_orders:
+        po_number = shiphero_po['node']['po_number']
+        
+        # Find the matching purchase order in Airtable by PO number
+        airtable_po_record = next((po for po in purchase_orders if po['fields']['PO #'] == po_number), None)
+        
+        if airtable_po_record:
+            try:
+                # Fetch line items for the purchase order
+                line_items = line_items_table.all(formula=f"{{PO #}} = '{po_number}'")
+                airtable_po_record['line_items'] = line_items
+
+                # Sync ShipHero Purchase Order data to Airtable
+                sync_shiphero_to_airtable(purchase_orders_table, line_items_table, airtable_po_record, shiphero_po['node'])
+                synced_count += 1
+                print(f"Successfully synced purchase order: {po_number} to Airtable.")
+            except Exception as e:
+                print(f"Failed to sync purchase order: {po_number} to Airtable. Error: {e}")
         else:
-            print(f"No matching Airtable PO found for ShipHero PO ID: {shiphero_po_id}")
+            not_found_po_numbers.append(po_number)
 
-def sync_shiphero():
-    print("Syncing new purchase orders from Airtable to ShipHero...")
-    purchase_orders = fetch_purchase_orders_to_sync()
-    push_enqueued_pos_to_shiphero(purchase_orders)
-    print("Finished syncing new purchase orders from Airtable to ShipHero.")
-    # print("Syncing purchase order data from ShipHero to Airtable...")
-    # sync_purchase_order_data_from_shiphero()
-    # print("Finished syncing purchase order data from ShipHero to Airtable.")
+    print(f"Synced {synced_count} purchase orders from ShipHero to Airtable.")
+    
+    if not_found_po_numbers:
+        print(f"Warning: The following purchase orders were not found in Airtable: {', '.join(not_found_po_numbers)}")

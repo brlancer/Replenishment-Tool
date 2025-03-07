@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, render_template
-from sync_shiphero import sync_shiphero
+import threading
 from prepare_replenishment import prepare_replenishment
 from populate_production import populate_production
-import threading
+from sync_shiphero import push_pos_to_shiphero
+from sync_shiphero import sync_shiphero_purchase_orders_to_airtable
 
 app = Flask(__name__)
 
@@ -18,10 +19,16 @@ def webhook_populate_production():
     threading.Thread(target=populate_production).start()
     return jsonify({"status": "Task populate_production started"}), 200
 
-@app.route('/webhook/sync_shiphero', methods=['GET', 'POST'])
-def webhook_sync_shiphero():
-    threading.Thread(target=sync_shiphero).start()
-    return jsonify({"status": "Task sync_shiphero started"}), 200
+@app.route('/webhook/push_pos_to_shiphero', methods=['GET', 'POST'])
+def webhook_push_pos_to_shiphero():
+    threading.Thread(target=push_pos_to_shiphero).start()
+    return jsonify({"status": "Task push_pos_to_shiphero started"}), 200
+
+@app.route('/webhook/sync_shiphero_purchase_orders_to_airtable', methods=['GET', 'POST'])
+def webhook_sync_shiphero_purchase_orders_to_airtable():
+    created_from = request.args.get('created_from') or request.form.get('created_from')
+    threading.Thread(target=sync_shiphero_purchase_orders_to_airtable, args=(created_from,)).start()
+    return jsonify({"status": "Task sync_shiphero_purchase_orders_to_airtable started"}), 200
 
 @app.route('/')
 def index():

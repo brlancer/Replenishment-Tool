@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webhook Server</title>
+    <title>Culk Inventory Robot Friend</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,11 +21,17 @@
     </style>
 </head>
 <body>
-    <h1>Webhook Server</h1>
+    <h1>Culk Inventory Robot Friend</h1>
+
     <button onclick="triggerTask('/webhook/prepare_replenishment?use_cache_stock_levels=false&use_cache_sales=false')">Prepare Replenishment (Full Reload)</button>
     <button onclick="triggerTask('/webhook/prepare_replenishment?use_cache_stock_levels=true&use_cache_sales=true')">Prepare Replenishment (Use Cache)</button>
     <button onclick="triggerTask('/webhook/populate_production')">Populate Production</button>
-    <button onclick="triggerTask('/webhook/sync_shiphero')">Sync ShipHero</button>
+    <button onclick="triggerTask('/webhook/push_pos_to_shiphero')">Push POs to ShipHero</button>
+    <form action="/webhook/sync_shiphero_purchase_orders_to_airtable" method="post">
+        <button type="submit">Sync ShipHero Purchase Orders to Airtable</button>
+        <label for="created_from">Created From (optional):</label>
+        <input type="date" id="created_from" name="created_from">
+    </form>
     <div id="status"></div>
 
     <script>
