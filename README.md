@@ -46,7 +46,6 @@ The web interface provides buttons to trigger the following functions:
 4. Push POs to ShipHero:
 
 - Pushes the newly created Purchase Orders to ShipHero
-- Sync ShipHero Purchase Orders to Airtable:
 
 5. Syncs purchase orders from ShipHero to Airtable
 
@@ -60,7 +59,7 @@ To start the Flask applicaiton:
 python app.py
 ```
 
-Navigate to http://localhost:5000 in your web browser to access the web interface and trigger the desired functions.
+Navigate to http://localhost:5001 in your web browser to access the web interface and trigger the desired functions.
 
 ## Notes
 
