@@ -27,30 +27,30 @@ The web interface provides buttons to trigger the following functions:
 
 1. Prepare Replenishment (Full Reload):
 
-- - Gathers current stock levels from ShipHero
-- - Retrieves past 8 weeks of sales data from Shopify
-- - Transforms sales data into time series
-- - Fetches product metadata from Airtable
-- - Uploads the dataset to the Replenishment worksheet in Google Drive
+- Gathers current stock levels from ShipHero
+- Retrieves past 8 weeks of sales data from Shopify
+- Transforms sales data into time series
+- Fetches product metadata from Airtable
+- Uploads the dataset to the Replenishment worksheet in Google Drive
 
 2. Prepare Replenishment (Use Cache):
 
-- - Uses cached stock levels and sales data to perform the same operations as the full reload
+- Uses cached stock levels and sales data to perform the same operations as the full reload
 
 3. Populate Production:
 
-- - Retrieves reorder quantities from the Replenishment worksheet
-- - Transforms them into new Purchase Orders
-- - Populates the Production base in Airtable
+- Retrieves reorder quantities from the Replenishment worksheet
+- Transforms them into new Purchase Orders
+- Populates the Production base in Airtable
 
 4. Push POs to ShipHero:
 
-- - Pushes the newly created Purchase Orders to ShipHero
-- - Sync ShipHero Purchase Orders to Airtable:
+- Pushes the newly created Purchase Orders to ShipHero
+- Sync ShipHero Purchase Orders to Airtable:
 
 5. Syncs purchase orders from ShipHero to Airtable
 
-- - Optionally filters by creation date
+- Optionally filters by creation date
 
 ## Examples
 
