@@ -1,13 +1,10 @@
 # PO Builder 3.0
 
-A command-line tool for preparing replenishment reports and populating Airtable production database with new purchase orders.
+A Flask-based web application for preparing replenishment reports and managing purchase orders.
 
 ## Overview
 
-This tool performs two main operations:
-
-1. Prepare replenishment reports by gathering data from multiple sources
-2. Publish new purchase orders to the Production base in Airtable
+This tool performs several operations related to inventory management and purchase orders through a web interface.
 
 ## Requirements
 
@@ -16,37 +13,55 @@ This tool performs two main operations:
 
 ## Usage
 
-The script is executed from the terminal by selecting one of two operations:
+The application is run locally as a Flask web server. To start the server, execute:
 
+```bash
+python app.py
 ```
-python main.py <task>
-```
 
-Available tasks:
+Once the server is running, open your web browser and navigate to `http://localhost:5000` to access the web interface.
 
-- `prepare_replenishment` - Prepares the replenishment report by:
+## Functions
 
-  - Getting current stock levels from ShipHero
-  - Getting past 8 weeks sales from Shopify
-  - Transforming sales data into time series
-  - Getting product metadata from Airtable
-  - Uploading the dataset to the Replenishment worksheet in Drive
+The web interface provides buttons to trigger the following functions:
 
-- `populate_airtable` - Publishes new POs to the Production base by:
-  - Getting reorder quantities from the Replenishment worksheet
-  - Transforming them into New Purchase Orders
-  - Populating the Production base in Airtable
+1. Prepare Replenishment (Full Reload):
+
+- - Gathers current stock levels from ShipHero
+- - Retrieves past 8 weeks of sales data from Shopify
+- - Transforms sales data into time series
+- - Fetches product metadata from Airtable
+- - Uploads the dataset to the Replenishment worksheet in Google Drive
+
+2. Prepare Replenishment (Use Cache):
+
+- - Uses cached stock levels and sales data to perform the same operations as the full reload
+
+3. Populate Production:
+
+- - Retrieves reorder quantities from the Replenishment worksheet
+- - Transforms them into new Purchase Orders
+- - Populates the Production base in Airtable
+
+4. Push POs to ShipHero:
+
+- - Pushes the newly created Purchase Orders to ShipHero
+- - Sync ShipHero Purchase Orders to Airtable:
+
+5. Syncs purchase orders from ShipHero to Airtable
+
+- - Optionally filters by creation date
 
 ## Examples
 
-```
-# To prepare replenishment report
-python main.py prepare_replenishment
+To start the Flask applicaiton:
 
-# To populate Airtable with new purchase orders
-python main.py populate_airtable
+```bash
+python app.py
 ```
+
+Navigate to http://localhost:5000 in your web browser to access the web interface and trigger the desired functions.
 
 ## Notes
 
-The script will exit with an error message if an invalid task is provided or if no task is specified.
+Ensure all required services (ShipHero, Shopify, Airtable, Google Drive) are properly configured and accessible for the application to function correctly.
