@@ -21,7 +21,7 @@ def export_sheets_replenishment(replenishment_df):
     sh = gc.open_by_key(file_id)
 
     # Get the "Data" worksheet
-    worksheet_data = sh.worksheet("Data")
+    worksheet_data = sh.worksheet("Data - Replenishment")
 
     # Clear the existing content in the "Replenishment" tab
     worksheet_data.clear()

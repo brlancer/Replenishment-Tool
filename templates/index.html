@@ -24,7 +24,7 @@
     <h1>Culk Analytics</h1>
 
     <button onclick="triggerTask('/webhook/prepare_replenishment?use_cache_stock_levels=false&use_cache_sales=false')">Prepare Replenishment (Full Reload)</button>
-    <button onclick="triggerTask('/webhook/prepare_replenishment?use_cache_stock_levels=true&use_cache_sales=true')">Prepare Replenishment (Use Cache)</button>
+    <button onclick="triggerTask('/webhook/prepare_replenishment?use_cache_stock_levels=false&use_cache_sales=true')">Prepare Replenishment (Quick Load)</button>
     <button onclick="triggerTask('/webhook/populate_production')">Populate Production</button>
     <button onclick="triggerTask('/webhook/packing_slips')">Generate Packing Slips</button>
     <button onclick="triggerTask('/webhook/push_pos_to_shiphero')">Push POs to ShipHero</button>

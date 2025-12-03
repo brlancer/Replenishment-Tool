@@ -4,8 +4,8 @@ import os
 # Add the project directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from fetch_data import fetch_shiphero_stock_levels, fetch_airtable_incoming_stock, fetch_shopify_inventory_data
-from transform_data import transform_stock_levels
+from fetch import fetch_shiphero_stock_levels, fetch_airtable_incoming_stock, fetch_shopify_inventory_data
+from transform import transform_stock_levels
 from utils import export_df
 
 def test_prepare_stock_levels():

@@ -2,8 +2,8 @@ import requests
 from pyairtable import Table
 import config
 import json
-from fetch_data import fetch_purchase_orders_from_shiphero
-import config
+from fetch import fetch_purchase_orders_from_shiphero
+
 
 def prepare_graphql_query_to_create_purchase_orders(po_record):
     """Prepare the GraphQL query for the purchase_order_create mutation."""
@@ -67,6 +67,7 @@ def prepare_graphql_query_to_create_purchase_orders(po_record):
 
     return query
 
+
 def execute_shiphero_graphql_query(query):
     """Execute the GraphQL query and return the response."""
     url = "https://public-api.shiphero.com/graphql"
@@ -81,6 +82,7 @@ def execute_shiphero_graphql_query(query):
     print("Response content:", response.content)
     response.raise_for_status()
     return response.json()
+
 
 def sync_shiphero_to_airtable(purchase_orders_table, line_items_table, airtable_po_record, shiphero_po):
     """Update Airtable with ShipHero Purchase Order data."""
@@ -101,6 +103,7 @@ def sync_shiphero_to_airtable(purchase_orders_table, line_items_table, airtable_
                 "shiphero_id": shiphero_line_item_id,
                 "Quantity Received": quantity_received
             })
+
 
 def push_pos_to_shiphero():
     """
@@ -150,6 +153,7 @@ def push_pos_to_shiphero():
             print(f"Failed to sync purchase order: {po_number} to ShipHero. Error: {e}")
             # Update Airtable status to "Failed"
             purchase_orders_table.update(po_id, {"ShipHero Sync Status": "Failed"})
+
 
 def sync_shiphero_purchase_orders_to_airtable(created_from: str = None):
     """

@@ -269,9 +269,9 @@ def fetch_shopify_sales_data(use_cache=False):
         
     print("Fetching fresh sales data from Shopify...")
 
-    # Calculate the date 9 weeks before today
-    nine_weeks_ago = datetime.now() - timedelta(weeks=9)
-    formatted_date = nine_weeks_ago.strftime("%Y-%m-%d")
+    # Calculate the date 53 weeks before today (52 complete weeks + 1 week buffer)
+    fifty_three_weeks_ago = datetime.now() - timedelta(weeks=53)
+    formatted_date = fifty_three_weeks_ago.strftime("%Y-%m-%d")
     
     inner_query = f"""
     {{

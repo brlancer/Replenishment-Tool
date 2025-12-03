@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the function to test
-from fetch_data import fetch_shopify_inventory_data
+from fetch import fetch_shopify_inventory_data
 from utils import export_json
 
 def test_fetch_shopify_inventory_data():

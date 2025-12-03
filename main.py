@@ -1,10 +1,9 @@
 from flask import Flask, request, jsonify, render_template
 import threading
-from prepare_replenishment import prepare_replenishment
-from populate_production import populate_production
-from sync_shiphero import push_pos_to_shiphero
-from sync_shiphero import sync_shiphero_purchase_orders_to_airtable
-from packing_slips import packing_slips
+from workflows import prepare_replenishment
+from export import populate_production
+from workflows import push_pos_to_shiphero, sync_shiphero_purchase_orders_to_airtable
+from documents import packing_slips
 
 app = Flask(__name__)
 

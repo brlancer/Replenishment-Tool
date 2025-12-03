@@ -1,0 +1,10 @@
+flask
+requests
+pandas
+pyairtable
+gspread
+google-auth
+google-auth-oauthlib
+google-api-python-client
+reportlab
+pytest

@@ -1,6 +1,6 @@
 import pandas as pd
-from fetch_data import fetch_shopify_sales_data
-from transform_data import transform_sales_data
+from fetch import fetch_shopify_sales_data
+from transform import transform_sales_data
 from utils import export_df
 
 def prepare_sales():
