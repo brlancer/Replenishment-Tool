@@ -3,7 +3,7 @@ import threading
 from workflows import prepare_replenishment
 from export import populate_production
 from workflows import push_pos_to_shiphero, sync_shiphero_purchase_orders_to_airtable
-from documents import packing_slips
+from documents import packing_slips, barcode_labels
 
 app = Flask(__name__)
 
@@ -28,6 +28,11 @@ def webhook_push_pos_to_shiphero():
 def webhook_packing_slips():
     threading.Thread(target=packing_slips).start()
     return jsonify({"status": "Task packing_slips started"}), 200
+
+@app.route('/webhook/barcode_labels', methods=['GET', 'POST'])
+def webhook_barcode_labels():
+    threading.Thread(target=barcode_labels).start()
+    return jsonify({"status": "Task barcode_labels started"}), 200
 
 @app.route('/webhook/sync_shiphero_purchase_orders_to_airtable', methods=['GET', 'POST'])
 def webhook_sync_shiphero_purchase_orders_to_airtable():
