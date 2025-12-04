@@ -91,17 +91,6 @@ def validate_and_format_barcode(barcode_value):
     return barcode_digits
 
 
-def draw_rounded_rect(c, x, y, width, height, radius):
-    """Draw a rectangle with rounded corners on a canvas."""
-    from reportlab.lib.utils import ImageReader
-    from reportlab.pdfgen import canvas as pdfcanvas
-    
-    # Draw the rounded rectangle using path
-    c.saveState()
-    c.roundRect(x, y, width, height, radius, stroke=0, fill=0)
-    c.restoreState()
-
-
 def generate_barcode_labels(order):
     """Generate a PDF sheet of barcode labels for a purchase order."""
     filename = f"barcode_labels_{order['id']}.pdf"
@@ -167,11 +156,6 @@ def generate_barcode_labels(order):
         # Calculate x, y position (bottom-left corner of label)
         x = left_margin + col * horizontal_pitch
         y = page_height - top_margin - label_height - row * vertical_pitch
-        
-        # Draw rounded rectangle border (optional - for debugging layout)
-        # c.setStrokeColorRGB(0.8, 0.8, 0.8)
-        # c.setLineWidth(0.5)
-        # c.roundRect(x, y, label_width, label_height, corner_radius, stroke=1, fill=0)
         
         # Extract field values
         fields = item['fields']

@@ -96,7 +96,8 @@ def test_generate_barcode_labels_mock():
         print(f"✓ File size is {file_size} bytes (reasonable size)")
         
         print("\nBarcode label generation test passed!")
-        return filename
+        # Clean up test file
+        os.remove(filename)
         
     except Exception as e:
         print(f"✗ Error during barcode label generation: {e}")
