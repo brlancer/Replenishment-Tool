@@ -40,7 +40,7 @@ def fetch_purchase_orders_for_barcode_labels():
         print(f"Fetching line items for purchase order number: {po_number}...")
         line_items = line_items_table.all(
             formula=f"{{PO #}} = '{po_number}'",
-            fields=['Position', 'Line Item Name', 'sku', 'Option1 Value', 'Barcode']
+            fields=['Position', 'Line Item Name', 'sku', 'Quantity Ordered', 'Option1 Value', 'Barcode']
         )
         # Sort line items by 'Position'
         line_items.sort(key=lambda item: item['fields'].get('Position', 0))
@@ -140,8 +140,48 @@ def generate_barcode_labels(order):
         os.rename(filename, debug_filename)
         return debug_filename
     
-    # Process each line item
-    for item_index, item in enumerate(line_items):
+    # Expand line items based on Quantity Ordered
+    expanded_line_items = []
+    total_labels = 0
+    
+    for item in line_items:
+        # Extract quantity, with validation
+        qty = item['fields'].get('Quantity Ordered', 1)
+        
+        # Handle non-integer quantities (cast to int)
+        try:
+            qty = int(qty) if qty is not None else 1
+        except (ValueError, TypeError):
+            qty = 1
+        
+        # Skip items with quantity 0 or negative
+        if qty <= 0:
+            continue
+        
+        # Add item to expanded list qty times
+        expanded_line_items.extend([item] * qty)
+        total_labels += qty
+    
+    # Warn if total labels exceeds 10,000
+    if total_labels > 10000:
+        print(f"Warning: Total labels ({total_labels}) exceeds 10,000. PDF generation may take longer.")
+    
+    # If no valid items after expansion, create empty page
+    if not expanded_line_items:
+        print(f"Warning: No line items with valid quantities found for PO {po_number}")
+        c.showPage()
+        c.save()
+        
+        # Save to output directory
+        output_dir = "output"
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        debug_filename = os.path.join(output_dir, filename)
+        os.rename(filename, debug_filename)
+        return debug_filename
+    
+    # Process each expanded line item
+    for item_index, item in enumerate(expanded_line_items):
         # Determine position on page
         label_on_page = item_index % labels_per_page
         
@@ -156,17 +196,24 @@ def generate_barcode_labels(order):
         # Calculate x, y position (bottom-left corner of label)
         x = left_margin + col * horizontal_pitch
         y = page_height - top_margin - label_height - row * vertical_pitch
-        
+
+        # Draw a 1px black border around the label
+        c.saveState()
+        c.setLineWidth(1)  # 1pt = 1/72 inch, close to 1px for print
+        c.setStrokeColorRGB(0, 0, 0)
+        c.rect(x, y, label_width, label_height, stroke=1, fill=0)
+        c.restoreState()
+
         # Extract field values
         fields = item['fields']
         sku = fields.get('sku', [''])[0] if isinstance(fields.get('sku', ['']), list) else fields.get('sku', '')
         line_item_name = fields.get('Line Item Name', [''])[0] if isinstance(fields.get('Line Item Name', ['']), list) else fields.get('Line Item Name', '')
         option1_value = fields.get('Option1 Value', [''])[0] if isinstance(fields.get('Option1 Value', ['']), list) else fields.get('Option1 Value', '')
         barcode_value = fields.get('Barcode', '')
-        
+
         # Validate and format barcode
         barcode_formatted = validate_and_format_barcode(barcode_value)
-        
+
         # Define text areas within the label
         text_margin = 0.05 * inch  # Small margin inside label
         text_x = x + text_margin
@@ -187,7 +234,7 @@ def generate_barcode_labels(order):
         # PRODUCT line (with wrapping if needed)
         product_label = f"PRODUCT: {line_item_name}"
         # Simple wrapping: split at max characters per line
-        max_chars = 20  # Approximate for 6pt font in 1.4" width
+        max_chars = 30  # Approximate for 6pt font in 1.4" width
         if len(product_label) > max_chars:
             # Wrap text
             words = product_label.split()
@@ -213,10 +260,10 @@ def generate_barcode_labels(order):
         
         # Middle section: Option1 Value (large bold, centered)
         if option1_value:
-            c.setFont("Helvetica-Bold", 14)
-            option_text_width = c.stringWidth(option1_value, "Helvetica-Bold", 14)
+            c.setFont("Helvetica-Bold", 18)
+            option_text_width = c.stringWidth(option1_value, "Helvetica-Bold", 18)
             option_x = x + (label_width - option_text_width) / 2
-            option_y = y + label_height * 0.5  # Middle of label
+            option_y = y + label_height * 0.4  # Middle of label
             c.drawString(option_x, option_y, option1_value)
         
         # Bottom section: EAN13 Barcode (centered, full width)
