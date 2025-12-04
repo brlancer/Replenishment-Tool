@@ -60,7 +60,13 @@ The server exposes webhook routes that start background threads to run workflows
 	- Pushes created POs to ShipHero.
 
 - `GET /webhook/packing_slips`
-	- Generates PDFs (uses `documents/packing_slips.py`).
+	- Generates packing slip PDFs (uses `documents/packing_slips.py`).
+
+- `GET /webhook/barcode_labels`
+	- Generates barcode label sheets for POs marked with "Generate barcode labels" (uses `documents/barcode_labels.py`).
+	- Creates 8.5"x11" sheets with 24 labels (4x6 grid), 1.5"x1.5" each.
+	- Each label includes: PO#, SKU, Product Name, Option1 Value, and EAN13 barcode.
+	- PDFs are uploaded to Airtable "Barcode labels" field.
 
 - `GET /webhook/sync_shiphero_purchase_orders_to_airtable?created_from=YYYY-MM-DD`
 	- Syncs ShipHero POs back to Airtable; `created_from` is optional filter passed into `workflows.sync_shiphero_purchase_orders_to_airtable`.
@@ -71,6 +77,7 @@ Examples (curl):
 curl 'http://localhost:5001/webhook/prepare_replenishment'
 curl 'http://localhost:5001/webhook/prepare_replenishment?use_cache_stock_levels=true&use_cache_sales=true'
 curl 'http://localhost:5001/webhook/populate_production'
+curl 'http://localhost:5001/webhook/barcode_labels'
 ```
 
 ## Core workflow overview
