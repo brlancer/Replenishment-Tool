@@ -16,21 +16,39 @@ def fetch_shopify_sales_data(use_cache=False):
     """
     
     CACHE_FILE = 'cache/shopify_sales_data.pkl'
+    cached_data = []
+    most_recent_order_date = None
 
+    # Load cached data if it exists and use_cache is True
     if use_cache and os.path.exists(CACHE_FILE):
         print("Loading cached sales data...")
         with open(CACHE_FILE, 'rb') as f:
-          return pickle.load(f)
+            cached_data = pickle.load(f)
         
-    print("Fetching fresh sales data from Shopify...")
+        # Find the most recent order date in the cache
+        order_dates = [
+            datetime.strptime(item['createdAt'], "%Y-%m-%dT%H:%M:%SZ")
+            for item in cached_data
+            if '__parentId' not in item and 'createdAt' in item
+        ]
+        if order_dates:
+            most_recent_order_date = max(order_dates)
+            print(f"Most recent cached order: {most_recent_order_date.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # Calculate the date 53 weeks before today (52 complete weeks + 1 week buffer)
-    fifty_three_weeks_ago = datetime.now() - timedelta(weeks=53)
-    formatted_date = fifty_three_weeks_ago.strftime("%Y-%m-%d")
-    
+    # Determine the start date for fetching new orders
+    if most_recent_order_date:
+        # Fetch orders created after the most recent cached order
+        start_date = most_recent_order_date.strftime("%Y-%m-%d")
+        print(f"Fetching new orders since {start_date}...")
+    else:
+        # If no cache, fetch the past 53 weeks
+        fifty_three_weeks_ago = datetime.now() - timedelta(weeks=53)
+        start_date = fifty_three_weeks_ago.strftime("%Y-%m-%d")
+        print("Fetching fresh sales data from Shopify (past 53 weeks)...")
+
     inner_query = f"""
     {{
-      orders(query: "created_at:>={formatted_date} AND (fulfillment_status:shipped OR fulfillment_status:unfulfilled OR fulfillment_status:partial) AND (financial_status:paid OR financial_status:pending) AND -tag:'Exclude from Forecast'") {{
+      orders(query: "created_at:>={start_date} AND (fulfillment_status:shipped OR fulfillment_status:unfulfilled OR fulfillment_status:partial) AND (financial_status:paid OR financial_status:pending) AND -tag:'Exclude from Forecast'") {{
         edges {{
           node {{
             id
@@ -57,12 +75,26 @@ def fetch_shopify_sales_data(use_cache=False):
     }}
     """
     
-    sales_data = fetch_shopify_bulk_operation(inner_query)
+    new_data = fetch_shopify_bulk_operation(inner_query)
+    
+    # Merge new data with cached data, removing duplicates by order ID
+    if cached_data and new_data:
+        # Get set of order IDs from new data (orders are items without __parentId)
+        new_order_ids = {item['id'] for item in new_data if '__parentId' not in item}
+        
+        # Keep cached items that are not in the new data (avoid duplicates)
+        deduplicated_cache = [item for item in cached_data if item.get('id') not in new_order_ids]
+        
+        # Combine deduplicated cache with new data
+        sales_data = deduplicated_cache + new_data
+        print(f"Merged {len(new_data)} new items with {len(deduplicated_cache)} cached items")
+    else:
+        sales_data = new_data if new_data else cached_data
 
-    # Save the fetched data to cache
+    # Save the merged data to cache
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, 'wb') as f:
-      pickle.dump(sales_data, f)
+        pickle.dump(sales_data, f)
 
     return sales_data
 
